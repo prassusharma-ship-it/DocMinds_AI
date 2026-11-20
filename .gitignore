@@ -50,3 +50,27 @@ htmlcov/
 .agents/
 .claude/
 .venv/
+
+# Model files (large binary files)
+models/*.joblib
+models/*.pkl
+models/*.h5
+models/*.pt
+models/*.bin
+
+# Dataset files (can be large or contain sensitive data)
+dataset/*.csv
+dataset/*.json
+dataset/*.parquet
+
+# Evaluation results (generated files)
+evaluation/*.csv
+evaluation/*.json
+evaluation/*.joblib
+
+# Local user directories (should not be committed)
+Users/
+
+# Logs
+*.log
+logs/

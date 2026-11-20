@@ -1,12 +1,19 @@
 
 import streamlit as st
 import hashlib
+import time
+from pathlib import Path
 import html
 
+from src.ml_models.classification import predict_category
+from src.ml_models.regression import predict_response_time
 from src.pdf_processing import extract_pdf, create_chunks
 from src.vector_database import VectorDatabase
 from src.retrieval import HybridRetriever
 from src.rag_pipeline import generate_answer
+from evaluation.response_metrics import save_response_metrics
+
+
 
 
 # -----------------------------------
@@ -204,6 +211,7 @@ for key, value in defaults.items():
         st.session_state[key] = value
 
 
+
 # -----------------------------------
 # HEADER
 # -----------------------------------
@@ -262,6 +270,64 @@ def get_file_signature(files):
 
     return digest.hexdigest()
 
+
+def classify_pdf(uploaded_file):
+    """
+    Extract text from an uploaded PDF and predict
+    its document category using the trained ML model.
+    """
+
+    # Reuse your existing PDF extraction function
+    documents = extract_pdf(uploaded_file)
+
+    if not documents:
+        return {
+            "category": "No readable text",
+            "confidence": 0.0
+        }
+
+    # Combine extracted pages into one document
+    full_text = " ".join(
+        page["text"] for page in documents
+    )
+
+    # Limit text length for manageable prediction
+    full_text = full_text[:30000]
+
+    # Predict category with trained classifier
+    return predict_category(full_text)
+
+
+REGRESSION_MODEL_PATH = Path(
+    "models/response_time_regressor.joblib"
+)
+
+
+def estimate_response_time(question, retrieved_chunks):
+    """
+    Predict response time using the trained regression model.
+    """
+
+    if not REGRESSION_MODEL_PATH.exists():
+        return None
+
+    query_length = len(question.split())
+
+    context_length = sum(
+        len(chunk["text"].split())
+        for chunk in retrieved_chunks
+    )
+
+    chunk_count = len(retrieved_chunks)
+
+    return predict_response_time(
+        query_length=query_length,
+        context_length=context_length,
+        retrieved_chunks=chunk_count
+    )
+
+if "document_categories" not in st.session_state:
+    st.session_state.document_categories = {}
 
 # -----------------------------------
 # MAIN TWO-COLUMN DASHBOARD
@@ -354,6 +420,32 @@ with left_col:
                     st.error(
                         f"Document processing failed: {error}"
                     )
+        
+        # Classify each uploaded PDF
+        if Path("models/document_classifier.joblib").exists():
+
+            st.session_state.document_categories = {}
+
+            for uploaded_file in uploaded_files:
+                try:
+                    result = classify_pdf(uploaded_file)
+
+                    st.session_state.document_categories[
+                        uploaded_file.name
+                    ] = result
+
+                except Exception as e:
+                    st.warning(
+                        f"Classification failed for "
+                f"{uploaded_file.name}: {e}"
+            )
+
+        else:
+            st.info(
+            "Document classifier is not trained yet. "
+            "RAG indexing will still work."
+        )
+
 
     if st.session_state.retriever is not None:
 
@@ -464,6 +556,8 @@ with right_col:
                 ):
 
                     try:
+                        start_time = time.perf_counter()
+
                         chunks = (
                             st.session_state.retriever.search(
                                 question,
@@ -476,7 +570,22 @@ with right_col:
                             chunks
                         )
 
+                        actual_time = time.perf_counter() - start_time
+
+                        estimated_time = estimate_response_time(
+                            question, chunks
+                        )
+
                         st.write(answer)
+
+                        if estimated_time is not None:
+                            st.caption(
+                                f"Predicted response time: {estimated_time:.2f} s"
+                            )
+
+                        st.caption(
+                            f"Actual response time: {actual_time:.2f} s"
+                        )
 
                         with st.expander("View Sources"):
 
@@ -503,3 +612,21 @@ with right_col:
                         st.error(
                             f"Unable to answer: {error}"
                         )
+
+if st.session_state.document_categories:
+
+    st.subheader("Document Classification")
+
+    for filename, result in (
+        st.session_state.document_categories.items()
+    ):
+        category = result["category"]
+        confidence = result["confidence"]
+
+        with st.container(border=True):
+            st.write(f"📄 **{filename}**")
+            st.write(f"Category: **{category}**")
+            st.caption(
+                f"Model confidence: {confidence:.1%}"
+            )
+

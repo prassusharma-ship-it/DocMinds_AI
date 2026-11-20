@@ -1,0 +1,2 @@
+
+pip install streamlit pymupdf sentence-transformers faiss-cpu rank-bm25 numpy pandas scikit-learn matplotlib python-dotenv openai pytest

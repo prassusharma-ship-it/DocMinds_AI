@@ -1,0 +1,23 @@
+
+[
+  {
+    "id": "q1",
+    "question": "What is supervised learning?",
+    "relevant_sources": [
+      {
+        "source": "AI_Syllabus.pdf",
+        "page": 2
+      }
+    ]
+  },
+  {
+    "id": "q2",
+    "question": "What is database normalization?",
+    "relevant_sources": [
+      {
+        "source": "DBMS_Notes.pdf",
+        "page": 4
+      }
+    ]
+  }
+]
